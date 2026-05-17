@@ -335,15 +335,16 @@ export function HotspotEditor({
         <div className="space-y-3">
           <div
             className={`relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal ${
-              // Force vertical clips to a clean 9:16 with a hard 60vh height
-              // cap. Some phone recordings come in at 9:19.5 or 9:21 and
-              // Video.js's fluid padding trick passes that aspect straight
-              // through — overwhelming the viewport. The wrapper sets the
-              // aspect via Tailwind's arbitrary aspect-[9/16]; .vertical-
-              // player-cap in globals.css disables Video.js's padding-top
-              // and lets the player fill our container.
+              // Vertical clips: explicit dimensions. h-[55vh] w-[31vh] is
+              // a clean 9:16 (31/55 ≈ 0.5636) at ~half the viewport height.
+              // Tried aspect-ratio + max-h earlier — w-auto on a block
+              // fills the parent, so max-h alone never pulled the width
+              // down to match. Explicit vh values are deterministic.
+              // .vertical-player-cap class in globals.css disables Video.js's
+              // padding-top fluid trick so the player fills the box instead
+              // of dictating its own height from the source aspect.
               isVertical
-                ? 'vertical-player-cap aspect-[9/16] max-h-[60vh] w-auto'
+                ? 'vertical-player-cap h-[55vh] w-[31vh]'
                 : 'w-full'
             }`}
           >
