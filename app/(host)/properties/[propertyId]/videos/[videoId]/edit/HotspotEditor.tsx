@@ -197,6 +197,13 @@ export function HotspotEditor({
   const isVertical =
     video.widthPx && video.heightPx && video.heightPx > video.widthPx;
 
+  // Player's actual playing aspect ratio (width / height) — populated after
+  // `loadedmetadata` from player.videoWidth()/videoHeight(). DB metadata is
+  // sometimes inverted by rotation handling, so we don't trust it; the
+  // player's own report is the source of truth for what the user actually
+  // sees on screen.
+  const [playerAspect, setPlayerAspect] = useState<number | null>(null);
+
   const handlePlayerReady = useCallback((player: VideoJsPlayer) => {
     playerRef.current = player;
     const onTime = () => {
@@ -204,7 +211,39 @@ export function HotspotEditor({
       if (typeof t === 'number') setCurrentTime(t);
     };
     player.on('timeupdate', onTime);
+
+    const readAspect = () => {
+      const w = player.videoWidth();
+      const h = player.videoHeight();
+      if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) {
+        setPlayerAspect(w / h);
+      }
+    };
+    player.on('loadedmetadata', readAspect);
+    // metadata may already be loaded by the time onReady fires — try once
+    // immediately so we don't wait for a second loadedmetadata event.
+    readAspect();
   }, []);
+
+  // Compute wrapper dimensions from the runtime aspect. Caps: max 480px in
+  // either axis so the player never requires scrolling on any normal
+  // viewport. Falls back to 480x270 (16:9 horizontal) before the player
+  // reports its real dimensions — brief flash of placeholder size as the
+  // video metadata loads is acceptable.
+  const playerBoxStyle = (() => {
+    const MAX = 480;
+    if (!playerAspect) return { width: '480px', height: '270px' };
+    if (playerAspect < 1) {
+      // Vertical: height capped, width follows aspect.
+      const height = Math.min(MAX, 360); // 360 keeps room for chapter track
+      const width = height * playerAspect;
+      return { width: `${Math.round(width)}px`, height: `${height}px` };
+    }
+    // Horizontal: width capped, height follows aspect.
+    const width = MAX;
+    const height = width / playerAspect;
+    return { width: `${width}px`, height: `${Math.round(height)}px` };
+  })();
 
   const seekTo = useCallback(
     (t: number) => {
@@ -459,7 +498,7 @@ export function HotspotEditor({
             // at 480x270, vertical sources fit cropped inside the same
             // box via object-fit: cover on .vjs-tech.
             className="editor-player-frame relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal"
-            style={{ width: '480px', height: '270px' }}
+            style={playerBoxStyle}
           >
             <VideoJSWithAnnotations
               src={video.sourceUrl}
