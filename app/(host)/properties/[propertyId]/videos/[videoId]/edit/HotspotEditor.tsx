@@ -451,15 +451,14 @@ export function HotspotEditor({
         <div className="space-y-3">
           <div
             ref={placementBoxRef}
-            className={`relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal ${
-              isVertical ? 'vertical-player-cap' : 'w-full'
-            }`}
-            // Inline width/height beats both Tailwind JIT and Video.js's own
-            // CSS — needed because earlier rounds with class-based sizing
-            // (max-h, vh, aspect-ratio) were getting beaten by Video.js's
-            // inline padding-top from fluid mode. 200×356 ≈ 9:16, phone-
-            // screen footprint, fits above the fold on any viewport.
-            style={isVertical ? { width: '200px', height: '356px' } : undefined}
+            // Universal viewport-relative cap: never wider than 60vh, never
+            // taller than 70vh. Video.js fluid mode picks the source's
+            // natural aspect inside these bounds — so 16:9, 9:16, and 22:9
+            // panoramic sources all land at a comfortable on-screen size
+            // without ever requiring scroll. We no longer branch on
+            // `isVertical` because DB-side metadata has sometimes been
+            // inverted; the dual cap handles every aspect uniformly.
+            className="relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal w-full max-w-[60vh] max-h-[70vh]"
           >
             <VideoJSWithAnnotations
               src={video.sourceUrl}
@@ -473,11 +472,10 @@ export function HotspotEditor({
               }))}
               hostName="Host"
               mode="editor"
-              // For vertical clips we drive size from the wrapper's fixed
-              // h-[55vh]/w-[31vh]; Video.js's fluid mode would otherwise set
-              // inline padding-top from the source's aspect (which can be
-              // 9:21 on some phone recordings) and stretch the player.
-              fluid={!isVertical}
+              // Fluid on for all sources — let Video.js pick the source's
+              // aspect natively. The wrapper's max-w-[60vh]/max-h-[70vh]
+              // caps the resulting box on both axes.
+              fluid
               onHotspotOpened={(id) => setOpenId(id)}
               onPlayerReady={handlePlayerReady}
             />
@@ -848,9 +846,21 @@ function HotspotRow({
   onRefresh: () => void;
 }) {
   const Icon = ICON_BY_NAME[hotspot.icon];
+  const rowRef = useRef<HTMLLIElement | null>(null);
+
+  // When this row becomes expanded (e.g. host clicked Edit on the in-video
+  // overlay), make sure it's actually on screen. Without this, on narrow
+  // viewports or after a long scroll the panel opens silently below the fold
+  // and the host concludes the button "didn't work".
+  useEffect(() => {
+    if (!expanded) return;
+    const el = rowRef.current;
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }, [expanded]);
 
   return (
-    <li className="surface-card overflow-hidden">
+    <li ref={rowRef} className="surface-card overflow-hidden">
       <div className="flex items-center gap-3 px-4 py-3">
         <button
           type="button"
