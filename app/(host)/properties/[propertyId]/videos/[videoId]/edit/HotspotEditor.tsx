@@ -15,6 +15,7 @@ import {
   Plus,
   Trash2,
   ImagePlus,
+  Play,
   Wifi,
   Trash,
   KeyRound,
@@ -27,6 +28,11 @@ import {
 import { HOTSPOT_ICONS, type HotspotIcon } from '@/lib/validators';
 import { ConfirmModal } from '@/components/ConfirmModal';
 import type { VideoJsPlayer } from '@/components/video/types';
+import {
+  ChapterTrack,
+  InVideoOverlay,
+  computeOverlayState,
+} from '@/components/video/HotspotOverlays';
 
 // Video.js touches window on import; keep the wrapper client-only.
 const VideoJSWithAnnotations = dynamic(
@@ -125,6 +131,21 @@ export function HotspotEditor({
       const clamped = Math.max(0, Math.min(t, video.durationSeconds));
       player.currentTime(clamped);
       setCurrentTime(clamped);
+    },
+    [video.durationSeconds],
+  );
+
+  // Seek + start playback. Used by the per-hotspot "Play from here" button so
+  // the action has a visible effect — seeking alone just moves the playhead,
+  // which the host won't notice if they were looking at the form.
+  const playFrom = useCallback(
+    (t: number) => {
+      const player = playerRef.current;
+      if (!player) return;
+      const clamped = Math.max(0, Math.min(t, video.durationSeconds));
+      player.currentTime(clamped);
+      setCurrentTime(clamped);
+      player.play()?.catch?.(() => {});
     },
     [video.durationSeconds],
   );
@@ -313,12 +334,17 @@ export function HotspotEditor({
         {/* Player + timeline */}
         <div className="space-y-3">
           <div
-            className={`mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal ${
-              // For vertical, cap width to 40% of viewport HEIGHT in pixels.
-              // Video.js fluid mode picks up the 9:16 intrinsic aspect, so a
-              // 40vh-wide player ends up ~71vh tall — fits comfortably above
-              // the fold on a typical laptop without scrolling.
-              isVertical ? 'max-w-[40vh]' : 'w-full'
+            className={`relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal ${
+              // Force vertical clips to a clean 9:16 with a hard 60vh height
+              // cap. Some phone recordings come in at 9:19.5 or 9:21 and
+              // Video.js's fluid padding trick passes that aspect straight
+              // through — overwhelming the viewport. The wrapper sets the
+              // aspect via Tailwind's arbitrary aspect-[9/16]; .vertical-
+              // player-cap in globals.css disables Video.js's padding-top
+              // and lets the player fill our container.
+              isVertical
+                ? 'vertical-player-cap aspect-[9/16] max-h-[60vh] w-auto'
+                : 'w-full'
             }`}
           >
             <VideoJSWithAnnotations
@@ -336,7 +362,20 @@ export function HotspotEditor({
               onHotspotOpened={(id) => setOpenId(id)}
               onPlayerReady={handlePlayerReady}
             />
+            <InVideoOverlay
+              state={computeOverlayState(hotspots, currentTime)}
+              onOpenActive={(id) => setOpenId(id)}
+              onSeekToUpcoming={(t) => seekTo(t)}
+            />
           </div>
+          <ChapterTrack
+            hotspots={hotspots}
+            durationSeconds={video.durationSeconds}
+            onPick={(h) => {
+              seekTo(h.timestampSeconds);
+              setOpenId(h.id);
+            }}
+          />
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="text-xs text-charcoal-light">
               <span className="font-mono">
@@ -379,6 +418,7 @@ export function HotspotEditor({
                     seekTo(h.timestampSeconds);
                   }}
                   onSeek={(t) => seekTo(t)}
+                  onPlayFrom={(t) => playFrom(t)}
                   videoDuration={video.durationSeconds}
                   onLocalPatch={(patch) => updateHotspotLocal(h.id, patch)}
                   onLocalRemove={() => removeHotspotLocal(h.id)}
@@ -416,6 +456,38 @@ function SaveIndicator({ lastSavedAt }: { lastSavedAt: number | null }) {
     <span className="inline-flex items-center gap-1.5 text-charcoal-light">
       <span className="h-1.5 w-1.5 rounded-full bg-gold" />
       Saved {label}
+    </span>
+  );
+}
+
+function InlineSaveStatus({
+  status,
+}: {
+  status: 'idle' | 'saving' | 'saved' | 'error';
+}) {
+  if (status === 'idle') return null;
+  const palette =
+    status === 'error'
+      ? 'border-red-300 bg-red-50 text-red-700'
+      : status === 'saving'
+        ? 'border-sand-light bg-cream-dark/60 text-charcoal-light'
+        : 'border-gold/30 bg-gold/10 text-gold-dark';
+  const dot =
+    status === 'saved'
+      ? 'bg-gold'
+      : status === 'saving'
+        ? 'bg-charcoal-light/50 animate-pulse'
+        : 'bg-red-500';
+  const label =
+    status === 'saving' ? 'Saving…' : status === 'saved' ? 'Saved' : 'Not saved';
+  return (
+    <span
+      className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] font-medium ${palette}`}
+      role="status"
+      aria-live="polite"
+    >
+      <span className={`h-1.5 w-1.5 rounded-full ${dot}`} />
+      {label}
     </span>
   );
 }
@@ -546,6 +618,7 @@ function HotspotRow({
   expanded,
   onSelect,
   onSeek,
+  onPlayFrom,
   videoDuration,
   onLocalPatch,
   onLocalRemove,
@@ -556,6 +629,7 @@ function HotspotRow({
   expanded: boolean;
   onSelect: () => void;
   onSeek: (t: number) => void;
+  onPlayFrom: (t: number) => void;
   videoDuration: number;
   onLocalPatch: (patch: Partial<EditorHotspot>) => void;
   onLocalRemove: () => void;
@@ -592,6 +666,7 @@ function HotspotRow({
         <HotspotDetails
           hotspot={hotspot}
           onSeek={onSeek}
+          onPlayFrom={onPlayFrom}
           videoDuration={videoDuration}
           onLocalPatch={onLocalPatch}
           onLocalRemove={onLocalRemove}
@@ -606,6 +681,7 @@ function HotspotRow({
 function HotspotDetails({
   hotspot,
   onSeek,
+  onPlayFrom,
   videoDuration,
   onLocalPatch,
   onLocalRemove,
@@ -614,6 +690,7 @@ function HotspotDetails({
 }: {
   hotspot: EditorHotspot;
   onSeek: (t: number) => void;
+  onPlayFrom: (t: number) => void;
   videoDuration: number;
   onLocalPatch: (patch: Partial<EditorHotspot>) => void;
   onLocalRemove: () => void;
@@ -630,14 +707,32 @@ function HotspotDetails({
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  // Save-on-blur feedback shown inside this open hotspot panel — the global
+  // "Saved Xs ago" header sits too far from the form fields, so a host
+  // editing a field doesn't notice it. This mirrors the same state inline.
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  const savedTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+    };
+  }, []);
 
   async function patch(body: Record<string, unknown>) {
+    setSaveStatus('saving');
+    if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
     const res = await fetch(`/api/hotspots/${hotspot.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
     });
-    if (!res.ok) return;
+    if (!res.ok) {
+      setSaveStatus('error');
+      return;
+    }
+    setSaveStatus('saved');
+    savedTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2500);
     onSaved();
     onRefresh();
   }
@@ -792,12 +887,15 @@ function HotspotDetails({
         />
         <button
           type="button"
-          onClick={() => onSeek(hotspot.timestampSeconds)}
-          className="text-xs text-charcoal-light underline-offset-2 hover:underline"
+          onClick={() => onPlayFrom(hotspot.timestampSeconds)}
+          className="inline-flex items-center gap-1 rounded-md border border-sand-light bg-white px-2 py-1 text-xs font-medium text-charcoal-light transition-colors duration-200 hover:border-gold/50 hover:text-gold-dark"
+          title={`Play video from ${formatTime(hotspot.timestampSeconds)}`}
         >
-          Jump
+          <Play size={12} />
+          Play from here
         </button>
         <div className="ml-auto flex flex-wrap items-center gap-2">
+          <InlineSaveStatus status={saveStatus} />
           <button
             type="button"
             onClick={() => setConfirming(true)}
@@ -808,6 +906,9 @@ function HotspotDetails({
           </button>
         </div>
       </div>
+      <p className="text-[11px] text-charcoal-light">
+        Changes save automatically when you click out of a field.
+      </p>
 
       <div className="space-y-1">
         <label className="text-xs font-medium text-charcoal">Title</label>
@@ -961,6 +1062,57 @@ function HotspotDetails({
             ))}
           </ul>
         )}
+      </div>
+
+      <div className="flex flex-wrap items-center justify-between gap-3 border-t border-sand-light pt-3">
+        <p className="text-[11px] text-charcoal-light">
+          Fields autosave when you click out. Use Save to commit everything at
+          once.
+        </p>
+        <button
+          type="button"
+          onClick={async () => {
+            // Commit every field the host might have edited, in one PATCH.
+            // The local-state values are the source of truth for "what the
+            // user typed but might not have blurred yet".
+            const body: Record<string, unknown> = {};
+            const cleanTitle = title.trim();
+            if (cleanTitle && cleanTitle !== hotspot.title)
+              body.title = cleanTitle;
+            if (icon !== hotspot.icon) body.icon = icon;
+            if (instructions !== hotspot.instructionsMd)
+              body.instructionsMd = instructions;
+            const parsedTime = parseTime(timeStr);
+            if (
+              parsedTime !== null &&
+              parsedTime <= videoDuration &&
+              parsedTime !== hotspot.timestampSeconds
+            ) {
+              body.timestampSeconds = parsedTime;
+              onLocalPatch({ timestampSeconds: parsedTime });
+              onSeek(parsedTime);
+            }
+            // Patch even if body is empty so the host gets a visible "Saved"
+            // confirmation — otherwise clicking Save twice in a row would
+            // show nothing the second time, which reads as broken.
+            if (Object.keys(body).length > 0) {
+              if (body.title) onLocalPatch({ title: body.title as string });
+              if (body.icon) onLocalPatch({ icon: body.icon as HotspotIcon });
+              if (body.instructionsMd !== undefined)
+                onLocalPatch({ instructionsMd: body.instructionsMd as string });
+              await patch(body);
+            } else {
+              // Nothing actually changed — just flash the confirmation pill.
+              setSaveStatus('saved');
+              if (savedTimerRef.current) clearTimeout(savedTimerRef.current);
+              savedTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2500);
+            }
+          }}
+          disabled={saveStatus === 'saving'}
+          className="btn-primary"
+        >
+          {saveStatus === 'saving' ? 'Saving…' : 'Save'}
+        </button>
       </div>
 
       {confirming && (
