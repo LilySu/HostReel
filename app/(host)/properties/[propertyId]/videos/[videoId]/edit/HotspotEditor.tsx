@@ -256,24 +256,41 @@ export function HotspotEditor({
     };
   }, [video.id]);
 
-  // Compute wrapper dimensions from the runtime aspect. Caps: max 480px in
-  // either axis so the player never requires scrolling on any normal
-  // viewport. Falls back to 480x270 (16:9 horizontal) before the player
-  // reports its real dimensions — brief flash of placeholder size as the
-  // video metadata loads is acceptable.
-  const playerBoxStyle = (() => {
-    const MAX = 480;
-    if (!playerAspect) return { width: '480px', height: '270px' };
-    if (playerAspect < 1) {
-      // Vertical: height capped, width follows aspect.
-      const height = Math.min(MAX, 360); // 360 keeps room for chapter track
-      const width = height * playerAspect;
-      return { width: `${Math.round(width)}px`, height: `${height}px` };
+  // Compute wrapper dimensions from runtime aspect, using viewport-relative
+  // units so the player scales with the page. Both axes capped so it never
+  // requires scrolling on any viewport. Once playerAspect is known we set
+  // aspect-ratio + a single capped dimension; before metadata loads, fall
+  // back to a wide 60vw placeholder.
+  const playerBoxStyle: React.CSSProperties = (() => {
+    const MAX_H_VH = 60; // 60% of viewport height
+    const MAX_W_VW = 55; // 55% of viewport width
+    if (!playerAspect) {
+      // Placeholder 16:9 while metadata loads.
+      return {
+        width: `${MAX_W_VW}vw`,
+        maxWidth: `${MAX_W_VW}vw`,
+        aspectRatio: '16 / 9',
+        maxHeight: `${MAX_H_VH}vh`,
+      };
     }
-    // Horizontal: width capped, height follows aspect.
-    const width = MAX;
-    const height = width / playerAspect;
-    return { width: `${width}px`, height: `${Math.round(height)}px` };
+    if (playerAspect < 1) {
+      // Vertical: height-driven so the box stays narrow.
+      return {
+        height: `${MAX_H_VH}vh`,
+        maxHeight: `${MAX_H_VH}vh`,
+        aspectRatio: `${playerAspect}`,
+        width: 'auto',
+        maxWidth: `${MAX_W_VW}vw`,
+      };
+    }
+    // Horizontal: width-driven.
+    return {
+      width: `${MAX_W_VW}vw`,
+      maxWidth: `${MAX_W_VW}vw`,
+      aspectRatio: `${playerAspect}`,
+      maxHeight: `${MAX_H_VH}vh`,
+      height: 'auto',
+    };
   })();
 
   const seekTo = useCallback(
@@ -543,10 +560,10 @@ export function HotspotEditor({
               }))}
               hostName="Host"
               mode="editor"
-              // Fluid on for all sources — let Video.js pick the source's
-              // aspect natively. The wrapper's max-w-[60vh]/max-h-[70vh]
-              // caps the resulting box on both axes.
-              fluid
+              // Fluid off — the wrapper drives the aspect-ratio via inline
+              // style based on the runtime detected dimensions. With fluid
+              // on, Video.js's padding-top trick would fight us.
+              fluid={false}
               onHotspotOpened={(id) => setOpenId(id)}
               onPlayerReady={handlePlayerReady}
             />
