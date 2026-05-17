@@ -451,14 +451,15 @@ export function HotspotEditor({
         <div className="space-y-3">
           <div
             ref={placementBoxRef}
-            // Universal viewport-relative cap: never wider than 60vh, never
-            // taller than 70vh. Video.js fluid mode picks the source's
-            // natural aspect inside these bounds — so 16:9, 9:16, and 22:9
-            // panoramic sources all land at a comfortable on-screen size
-            // without ever requiring scroll. We no longer branch on
-            // `isVertical` because DB-side metadata has sometimes been
-            // inverted; the dual cap handles every aspect uniformly.
-            className="relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal w-full max-w-[60vh] max-h-[70vh]"
+            // Hard fixed-pixel cap: player is at most 480x270 px on any
+            // viewport. Inline style + Tailwind for redundancy — inline
+            // beats Video.js's fluid-mode padding-top trick, Tailwind
+            // covers if inline gets stripped by anything. 480px wide is
+            // a comfortable above-the-fold size; horizontal videos play
+            // at 480x270, vertical sources fit cropped inside the same
+            // box via object-fit: cover on .vjs-tech.
+            className="editor-player-frame relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal"
+            style={{ width: '480px', height: '270px' }}
           >
             <VideoJSWithAnnotations
               src={video.sourceUrl}

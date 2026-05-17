@@ -117,21 +117,21 @@
   animation: indeterminate-bar 1.4s ease-in-out infinite;
 }
 
-/* Force vertical Video.js players to fill the wrapping container exactly,
- * clamping every layer down to the wrapper's box. Without these overrides
- * Video.js's intrinsic-aspect sizing (and the .vjs-poster background) can
- * push the visible player past the wrapper's bounds — especially for
- * 9:19.5 / 9:21 phone recordings. Pair with inline width/height on the
- * .vertical-player-cap wrapper so the box itself is rock-solid. */
-.vertical-player-cap,
-.vertical-player-cap > [data-vjs-player],
-.vertical-player-cap > [data-vjs-player] > div {
+/* Editor player container — fixed-size box, inline style sets width/height.
+ * These rules clamp Video.js's internals so they fill that box exactly,
+ * regardless of fluid-mode padding-top trickery or the source's aspect.
+ * The original .vertical-player-cap class is gone; targeting by data
+ * attribute instead so the wrapper styling doesn't depend on a class
+ * name that varies by mode. */
+.editor-player-frame,
+.editor-player-frame > [data-vjs-player],
+.editor-player-frame > [data-vjs-player] > div {
   height: 100% !important;
   width: 100% !important;
 }
-.vertical-player-cap .video-js,
-.vertical-player-cap .vjs-poster,
-.vertical-player-cap .vjs-tech {
+.editor-player-frame .video-js,
+.editor-player-frame .vjs-poster,
+.editor-player-frame .vjs-tech {
   position: absolute !important;
   inset: 0 !important;
   padding-top: 0 !important;
@@ -140,15 +140,11 @@
   max-height: 100% !important;
   max-width: 100% !important;
 }
-/* Crop the source to fill the 9:16 box. Default object-fit: contain
- * letterboxes tall sources (9:21 phone recordings) inside our wrapper —
- * the box stays 9:16 but the visible video shrinks. Cover fills the box
- * by cropping the top/bottom of the source instead. */
-.vertical-player-cap .vjs-tech {
-  object-fit: cover !important;
+.editor-player-frame .vjs-tech {
+  object-fit: contain !important;
   object-position: center !important;
 }
-.vertical-player-cap .vjs-poster {
-  background-size: cover !important;
+.editor-player-frame .vjs-poster {
+  background-size: contain !important;
   background-position: center !important;
 }
