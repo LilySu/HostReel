@@ -452,18 +452,14 @@ export function HotspotEditor({
           <div
             ref={placementBoxRef}
             className={`relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal ${
-              // Vertical clips: explicit dimensions. h-[55vh] w-[31vh] is
-              // a clean 9:16 (31/55 ≈ 0.5636) at ~half the viewport height.
-              // Tried aspect-ratio + max-h earlier — w-auto on a block
-              // fills the parent, so max-h alone never pulled the width
-              // down to match. Explicit vh values are deterministic.
-              // .vertical-player-cap class in globals.css disables Video.js's
-              // padding-top fluid trick so the player fills the box instead
-              // of dictating its own height from the source aspect.
-              isVertical
-                ? 'vertical-player-cap h-[55vh] w-[31vh] max-h-[360px] max-w-[202px]'
-                : 'w-full'
+              isVertical ? 'vertical-player-cap' : 'w-full'
             }`}
+            // Inline width/height beats both Tailwind JIT and Video.js's own
+            // CSS — needed because earlier rounds with class-based sizing
+            // (max-h, vh, aspect-ratio) were getting beaten by Video.js's
+            // inline padding-top from fluid mode. 200×356 ≈ 9:16, phone-
+            // screen footprint, fits above the fold on any viewport.
+            style={isVertical ? { width: '200px', height: '356px' } : undefined}
           >
             <VideoJSWithAnnotations
               src={video.sourceUrl}

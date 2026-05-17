@@ -117,22 +117,29 @@
   animation: indeterminate-bar 1.4s ease-in-out infinite;
 }
 
-/* Force vertical Video.js players to fill the wrapping container exactly.
- * Used in tandem with fluid={false} on the player + explicit h-[55vh]/
- * w-[31vh] on the wrapper. Without fluid mode Video.js defaults to 300x150
- * px; this override makes it absorb whatever size the wrapper sets, which
- * keeps tall phone recordings (9:19.5, 9:21) from overwhelming the
- * viewport. */
+/* Force vertical Video.js players to fill the wrapping container exactly,
+ * clamping every layer down to the wrapper's box. Without these overrides
+ * Video.js's intrinsic-aspect sizing (and the .vjs-poster background) can
+ * push the visible player past the wrapper's bounds — especially for
+ * 9:19.5 / 9:21 phone recordings. Pair with inline width/height on the
+ * .vertical-player-cap wrapper so the box itself is rock-solid. */
 .vertical-player-cap,
 .vertical-player-cap > [data-vjs-player],
 .vertical-player-cap > [data-vjs-player] > div {
   height: 100% !important;
   width: 100% !important;
 }
-.vertical-player-cap .video-js {
+.vertical-player-cap .video-js,
+.vertical-player-cap .vjs-poster,
+.vertical-player-cap .vjs-tech {
   position: absolute !important;
   inset: 0 !important;
   padding-top: 0 !important;
   height: 100% !important;
   width: 100% !important;
+  max-height: 100% !important;
+  max-width: 100% !important;
+}
+.vertical-player-cap .vjs-poster {
+  background-size: cover !important;
 }
