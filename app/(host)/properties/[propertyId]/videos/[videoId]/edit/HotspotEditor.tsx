@@ -360,6 +360,11 @@ export function HotspotEditor({
               }))}
               hostName="Host"
               mode="editor"
+              // For vertical clips we drive size from the wrapper's fixed
+              // h-[55vh]/w-[31vh]; Video.js's fluid mode would otherwise set
+              // inline padding-top from the source's aspect (which can be
+              // 9:21 on some phone recordings) and stretch the player.
+              fluid={!isVertical}
               onHotspotOpened={(id) => setOpenId(id)}
               onPlayerReady={handlePlayerReady}
             />

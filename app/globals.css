@@ -117,12 +117,18 @@
   animation: indeterminate-bar 1.4s ease-in-out infinite;
 }
 
-/* Force vertical Video.js players to fill the wrapping container exactly,
- * ignoring fluid mode's padding-top aspect trick. Pair with a wrapper that
- * sets aspect-ratio + max-height (see editor's vertical clip handling) so
- * tall phone recordings (9:19.5, 9:21) render at a clean 9:16 instead of
- * overwhelming the viewport. */
-.vertical-player-cap .video-js.vjs-fluid,
+/* Force vertical Video.js players to fill the wrapping container exactly.
+ * Used in tandem with fluid={false} on the player + explicit h-[55vh]/
+ * w-[31vh] on the wrapper. Without fluid mode Video.js defaults to 300x150
+ * px; this override makes it absorb whatever size the wrapper sets, which
+ * keeps tall phone recordings (9:19.5, 9:21) from overwhelming the
+ * viewport. */
+.vertical-player-cap,
+.vertical-player-cap > [data-vjs-player],
+.vertical-player-cap > [data-vjs-player] > div {
+  height: 100% !important;
+  width: 100% !important;
+}
 .vertical-player-cap .video-js {
   position: absolute !important;
   inset: 0 !important;
