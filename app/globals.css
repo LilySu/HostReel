@@ -140,6 +140,15 @@
   max-height: 100% !important;
   max-width: 100% !important;
 }
+/* Crop the source to fill the 9:16 box. Default object-fit: contain
+ * letterboxes tall sources (9:21 phone recordings) inside our wrapper —
+ * the box stays 9:16 but the visible video shrinks. Cover fills the box
+ * by cropping the top/bottom of the source instead. */
+.vertical-player-cap .vjs-tech {
+  object-fit: cover !important;
+  object-position: center !important;
+}
 .vertical-player-cap .vjs-poster {
   background-size: cover !important;
+  background-position: center !important;
 }
