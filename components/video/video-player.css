@@ -1,0 +1,73 @@
+/* Plugin styles plus brand-matching overrides. The plugin's classes are
+ * prefixed with `vac-`; Video.js controls are prefixed with `vjs-`.
+ * Override colors to land on our Himara palette (gold accents on cream).
+ */
+@import '@contently/videojs-annotation-comments/build/css/annotations.css';
+
+/* Hide the plugin's annotation toggle button in the player controls. We treat
+ * the plugin as a pure marker renderer; CRUD happens in our own forms. */
+.video-js .vac-player-btn,
+.video-js .vac-control-toggle {
+  display: none !important;
+}
+
+/* Hide the plugin's comment list / annotation pane. Our React detail panel
+ * renders that content instead. */
+.video-js .vac-comments-container,
+.video-js .vac-active-annotation,
+.video-js .vac-video-cover-canvas {
+  display: none !important;
+}
+
+/* Timeline markers — recolor to our gold accent. The plugin renders markers
+ * inside the progress bar as `.vac-marker` (or wrappers like `.vac-marker-wrap`).
+ * If a future plugin version renames these, update the selectors below and
+ * in components/video/VideoJSWithAnnotations.tsx#tagRequiredMarkers. */
+.video-js .vac-marker,
+.video-js .vac-marker-wrap {
+  background-color: #c8a876 !important; /* gold */
+  border: 2px solid #ffffff !important;
+  height: 14px !important;
+  width: 14px !important;
+  border-radius: 9999px !important;
+  margin-top: -3px;
+  cursor: pointer;
+  transition: transform 0.2s ease, background-color 0.2s ease;
+}
+
+.video-js .vac-marker:hover,
+.video-js .vac-marker-wrap:hover {
+  background-color: #a88b5c !important; /* gold-dark */
+  transform: scale(1.15);
+}
+
+/* Required (Stays) markers — a darker outline ring so they read as more
+ * formal than the casual gold dot. */
+.video-js .vac-marker[data-required='true'],
+.video-js .vac-marker-wrap[data-required='true'] {
+  background-color: #ffffff !important;
+  border: 2px solid #a88b5c !important;
+  box-shadow: 0 0 0 2px #c8a876;
+}
+
+/* Match the Video.js control bar to the cream palette so the player doesn't
+ * read as a black SaaS widget on a hospitality page. */
+.video-js .vjs-control-bar {
+  background-color: rgba(42, 39, 35, 0.75); /* charcoal/75 */
+}
+
+.video-js .vjs-big-play-button {
+  background-color: rgba(200, 168, 118, 0.85); /* gold/85 */
+  border: none;
+  border-radius: 9999px;
+}
+
+.video-js .vjs-play-progress,
+.video-js .vjs-volume-level {
+  background-color: #c8a876; /* gold */
+}
+
+.video-js .vjs-slider:focus {
+  text-shadow: none;
+  box-shadow: 0 0 0 2px rgba(200, 168, 118, 0.4); /* ring-gold/40 */
+}

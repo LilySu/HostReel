@@ -1,0 +1,16 @@
+{
+  "name": "HostReel",
+  "short_name": "HostReel",
+  "description": "Self-service check-in guides for short-term rentals",
+  "start_url": "/",
+  "display": "minimal-ui",
+  "background_color": "#FAF6EE",
+  "theme_color": "#C8A876",
+  "icons": [
+    {
+      "src": "/favicon.ico",
+      "sizes": "any",
+      "type": "image/x-icon"
+    }
+  ]
+}

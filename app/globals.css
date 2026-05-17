@@ -1,0 +1,118 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html,
+  body {
+    @apply h-full;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-serif text-charcoal;
+  }
+
+  ::selection {
+    @apply bg-gold/30 text-charcoal;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply inline-flex items-center justify-center rounded-full bg-gold px-5 py-2.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-gold-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center rounded-md border border-sand bg-white px-4 py-2 text-sm font-medium text-charcoal transition-colors duration-200 hover:bg-cream-dark focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/40 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-50;
+  }
+
+  .btn-destructive {
+    @apply inline-flex items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition-colors duration-200 hover:bg-red-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-400/40 focus-visible:ring-offset-2 focus-visible:ring-offset-cream disabled:opacity-50;
+  }
+
+  .field-input {
+    @apply w-full rounded-md border border-sand-light bg-white px-3 py-2 text-sm text-charcoal placeholder:text-charcoal-light/60 transition-colors duration-200 focus:border-gold focus:outline-none focus:ring-2 focus:ring-gold/20;
+  }
+
+  .surface-card {
+    @apply rounded-lg border border-sand-light bg-white;
+  }
+
+  .overline {
+    @apply text-xs font-medium uppercase tracking-overline text-charcoal-light;
+  }
+
+  /* Minimal markdown styling — used for hotspot instructions preview and
+     guest-facing detail panels. Intentionally narrow scope (no full
+     @tailwindcss/typography plugin) to keep the bundle small. */
+  .markdown-body p {
+    @apply my-2;
+  }
+  .markdown-body p:first-child {
+    @apply mt-0;
+  }
+  .markdown-body p:last-child {
+    @apply mb-0;
+  }
+  .markdown-body strong {
+    @apply font-semibold;
+  }
+  .markdown-body em {
+    @apply italic;
+  }
+  .markdown-body a {
+    @apply text-gold-dark underline underline-offset-2;
+  }
+  .markdown-body ul,
+  .markdown-body ol {
+    @apply my-2 ml-5 space-y-1;
+  }
+  .markdown-body ul {
+    @apply list-disc;
+  }
+  .markdown-body ol {
+    @apply list-decimal;
+  }
+  .markdown-body code {
+    @apply rounded bg-cream-dark px-1 py-0.5 font-mono text-xs;
+  }
+  .markdown-body h1,
+  .markdown-body h2,
+  .markdown-body h3 {
+    @apply mt-3 mb-1 font-sans text-sm font-semibold text-charcoal;
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 200ms ease-out;
+}
+
+/* Indeterminate progress bar — used during the post-upload finalize phase
+ * (ffmpeg probing + poster extraction) when we don't have a real percentage
+ * to show. Pairs with the "Almost there…" copy in AddVideoForm. */
+@keyframes indeterminate-bar {
+  0% {
+    transform: translateX(-110%);
+  }
+  100% {
+    transform: translateX(310%);
+  }
+}
+
+.animate-indeterminate-bar {
+  animation: indeterminate-bar 1.4s ease-in-out infinite;
+}

@@ -1,0 +1,63 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+
+# next.js
+.next/
+out/
+build/
+dist/
+.turbo/
+
+# env / secrets
+.env
+.env.local
+.env*.local
+
+# data & uploads (local dev only — all guest videos and SQLite live here)
+# Rooted on purpose: /storage/ is the top-level user uploads dir; lib/storage/
+# is application code and must stay tracked.
+/data/
+/storage/
+
+# typescript / build info
+*.tsbuildinfo
+tsconfig.tsbuildinfo
+
+# logs
+*.log
+npm-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# test / coverage
+coverage/
+.nyc_output/
+
+# os / editor
+.DS_Store
+Thumbs.db
+*.pem
+.vscode/
+.idea/
+
+# claude / agent scratchpads
+.claude/
+
+# Local-only test video inputs / outputs — kept on disk for the dev's own
+# convenience but never tracked. GitHub rejects files >100MB.
+*.mkv
+*.webm
+*.mp4
+*.mov
+
+# WSL/Windows interop drops "<file>:Zone.Identifier" alternate-data-stream
+# sidecars next to anything copied from Windows. Never commit them.
+*:Zone.Identifier
+
+# Asset moved into public/icons/ — keep the working copy there, not at repo root.
+/icons8-video-50.gif
