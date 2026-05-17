@@ -197,11 +197,11 @@ export function HotspotEditor({
   const isVertical =
     video.widthPx && video.heightPx && video.heightPx > video.widthPx;
 
-  // Player's actual playing aspect ratio (width / height) — populated after
-  // `loadedmetadata` from player.videoWidth()/videoHeight(). DB metadata is
-  // sometimes inverted by rotation handling, so we don't trust it; the
-  // player's own report is the source of truth for what the user actually
-  // sees on screen.
+  // Player's actual playing aspect ratio (width / height) — populated by
+  // polling the underlying <video> element after it mounts. DB metadata is
+  // sometimes inverted by rotation handling and Video.js's loadedmetadata
+  // event can be intercepted by the annotation plugin — polling the raw
+  // DOM is the most reliable source of truth for what's actually rendering.
   const [playerAspect, setPlayerAspect] = useState<number | null>(null);
 
   const handlePlayerReady = useCallback((player: VideoJsPlayer) => {
@@ -211,19 +211,50 @@ export function HotspotEditor({
       if (typeof t === 'number') setCurrentTime(t);
     };
     player.on('timeupdate', onTime);
-
-    const readAspect = () => {
-      const w = player.videoWidth();
-      const h = player.videoHeight();
-      if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) {
-        setPlayerAspect(w / h);
-      }
-    };
-    player.on('loadedmetadata', readAspect);
-    // metadata may already be loaded by the time onReady fires — try once
-    // immediately so we don't wait for a second loadedmetadata event.
-    readAspect();
   }, []);
+
+  // Poll for the underlying <video> element's videoWidth/videoHeight every
+  // 100ms until they report non-zero dimensions, then stop. Caps at ~5s of
+  // polling so we don't loop forever if something fails.
+  useEffect(() => {
+    let cancelled = false;
+    let attempts = 0;
+    const MAX_ATTEMPTS = 50; // 50 × 100ms = 5s
+    const poll = () => {
+      if (cancelled) return;
+      attempts++;
+      // Try Video.js player API first
+      const player = playerRef.current;
+      if (player) {
+        try {
+          const w = (player as unknown as { videoWidth?: () => number }).videoWidth?.();
+          const h = (player as unknown as { videoHeight?: () => number }).videoHeight?.();
+          if (typeof w === 'number' && typeof h === 'number' && w > 0 && h > 0) {
+            setPlayerAspect(w / h);
+            return;
+          }
+        } catch {
+          /* fall through to DOM query */
+        }
+      }
+      // Fall back to querying the underlying <video> element directly
+      if (typeof document !== 'undefined') {
+        const videoEl = document.querySelector<HTMLVideoElement>(
+          '.editor-player-frame video, .editor-player-frame .vjs-tech',
+        );
+        if (videoEl && videoEl.videoWidth > 0 && videoEl.videoHeight > 0) {
+          setPlayerAspect(videoEl.videoWidth / videoEl.videoHeight);
+          return;
+        }
+      }
+      if (attempts < MAX_ATTEMPTS) setTimeout(poll, 100);
+    };
+    const timer = setTimeout(poll, 200);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [video.id]);
 
   // Compute wrapper dimensions from the runtime aspect. Caps: max 480px in
   // either axis so the player never requires scrolling on any normal
