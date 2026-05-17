@@ -16,6 +16,8 @@ import {
   Trash2,
   ImagePlus,
   Play,
+  Crosshair,
+  MapPin,
   Wifi,
   Trash,
   KeyRound,
@@ -94,6 +96,66 @@ function parseTime(input: string): number | null {
   return null;
 }
 
+// ────────────────────────────────────────────────────────────────────────────
+// Spatial coordinate storage — TEMPORARY localStorage shim
+// ────────────────────────────────────────────────────────────────────────────
+// The DB does not yet have an (x, y) column on `hotspots`. Until the schema
+// migration lands (add `shape_x`, `shape_y` as nullable floats; update the
+// Zod validator; surface in PATCH /api/hotspots/[id]), positions live in
+// this host's browser only.
+//
+// Implications you should know about:
+//   • The host sees their own placements; guests, other hosts, and other
+//     browsers see hotspots at the default overlay position.
+//   • Clearing browser data wipes positions. Hotspots themselves survive
+//     (they're in Postgres) — only their on-frame coordinates are lost.
+//   • Once the DB column ships, swap these calls for an API PATCH and
+//     remove this comment.
+//
+// Coordinates are stored as a percentage of the video container's box, so
+// they survive responsive resizes. They include the Video.js control bar's
+// vertical real estate — that's a known small inaccuracy, accepted in v1.
+const HOTSPOT_POS_KEY_PREFIX = 'hotspot-pos-';
+
+type SpatialPos = { x: number; y: number };
+
+function loadHotspotPos(hotspotId: string): SpatialPos | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = window.localStorage.getItem(HOTSPOT_POS_KEY_PREFIX + hotspotId);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<SpatialPos>;
+    if (typeof parsed?.x === 'number' && typeof parsed?.y === 'number') {
+      return { x: parsed.x, y: parsed.y };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+function saveHotspotPos(hotspotId: string, pos: SpatialPos): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.setItem(
+      HOTSPOT_POS_KEY_PREFIX + hotspotId,
+      JSON.stringify(pos),
+    );
+  } catch {
+    // Quota exceeded or storage disabled — silently no-op. The hotspot
+    // itself was already created server-side; only the coordinate is lost.
+  }
+}
+
+function clearHotspotPos(hotspotId: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.localStorage.removeItem(HOTSPOT_POS_KEY_PREFIX + hotspotId);
+  } catch {
+    // ignore
+  }
+}
+
 export function HotspotEditor({
   video,
   initialHotspots,
@@ -109,6 +171,26 @@ export function HotspotEditor({
   const [creating, setCreating] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState<number | null>(null);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  // Click-on-video-to-place mode. When true, a crosshair overlay sits on top
+  // of the player and intercepts the next click — that click's coordinates
+  // become the new hotspot's spatial pin location.
+  const [placingMode, setPlacingMode] = useState(false);
+  // Per-hotspot (x, y) percentages, loaded from / synced to localStorage.
+  // See the comment block on HOTSPOT_POS_KEY_PREFIX for the limits.
+  const [positions, setPositions] = useState<Record<string, SpatialPos>>({});
+  const placementBoxRef = useRef<HTMLDivElement | null>(null);
+
+  // Hydrate positions whenever the hotspot set changes. Cheap: localStorage
+  // lookups are sync. We rebuild from scratch each time so deletions
+  // automatically drop their entries from `positions`.
+  useEffect(() => {
+    const next: Record<string, SpatialPos> = {};
+    for (const h of hotspots) {
+      const pos = loadHotspotPos(h.id);
+      if (pos) next[h.id] = pos;
+    }
+    setPositions(next);
+  }, [hotspots]);
 
   const markSaved = useCallback(() => setLastSavedAt(Date.now()), []);
 
@@ -155,8 +237,8 @@ export function HotspotEditor({
       title: string;
       icon: HotspotIcon;
       instructionsMd: string;
-    }) => {
-      if (creating) return;
+    }): Promise<EditorHotspot | null> => {
+      if (creating) return null;
       setCreating(true);
       const playerTime = playerRef.current?.currentTime();
       const t = Math.floor(typeof playerTime === 'number' ? playerTime : 0);
@@ -173,7 +255,7 @@ export function HotspotEditor({
         body: JSON.stringify(body),
       });
       setCreating(false);
-      if (!res.ok) return;
+      if (!res.ok) return null;
       const { hotspot } = (await res.json()) as {
         hotspot: Omit<EditorHotspot, 'photos'>;
       };
@@ -187,12 +269,40 @@ export function HotspotEditor({
       );
       setOpenId(newRow.id);
       markSaved();
+      return newRow;
     },
     [creating, markSaved, video.id],
   );
 
   async function addHotspotAtCurrent() {
     await createHotspot();
+  }
+
+  // Handle a click in placement mode. Computes the click position as a
+  // percentage of the player container, creates the hotspot via the existing
+  // API, then stashes the coordinates locally. Pauses playback first so the
+  // host's chosen frame stays on screen while they fill in details.
+  async function handlePlacementClick(e: React.MouseEvent<HTMLDivElement>) {
+    if (creating) return;
+    const box = placementBoxRef.current;
+    if (!box) return;
+    const rect = box.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    const x = ((e.clientX - rect.left) / rect.width) * 100;
+    const y = ((e.clientY - rect.top) / rect.height) * 100;
+    // Clamp to [0, 100] in case of edge pixel quirks.
+    const clamped: SpatialPos = {
+      x: Math.max(0, Math.min(100, x)),
+      y: Math.max(0, Math.min(100, y)),
+    };
+    const player = playerRef.current;
+    if (player && !player.paused()) player.pause();
+    const newRow = await createHotspot();
+    if (newRow) {
+      saveHotspotPos(newRow.id, clamped);
+      setPositions((prev) => ({ ...prev, [newRow.id]: clamped }));
+    }
+    setPlacingMode(false);
   }
 
   // Global keyboard shortcuts. Skip when host is typing in an input so the
@@ -280,6 +390,12 @@ export function HotspotEditor({
   function removeHotspotLocal(id: string) {
     setHotspots((list) => list.filter((h) => h.id !== id));
     if (openId === id) setOpenId(null);
+    clearHotspotPos(id);
+    setPositions((prev) => {
+      if (!(id in prev)) return prev;
+      const { [id]: _removed, ...rest } = prev;
+      return rest;
+    });
   }
 
   return (
@@ -334,6 +450,7 @@ export function HotspotEditor({
         {/* Player + timeline */}
         <div className="space-y-3">
           <div
+            ref={placementBoxRef}
             className={`relative mx-auto overflow-hidden rounded-lg border border-sand-light bg-charcoal ${
               // Vertical clips: explicit dimensions. h-[55vh] w-[31vh] is
               // a clean 9:16 (31/55 ≈ 0.5636) at ~half the viewport height.
@@ -344,7 +461,7 @@ export function HotspotEditor({
               // padding-top fluid trick so the player fills the box instead
               // of dictating its own height from the source aspect.
               isVertical
-                ? 'vertical-player-cap h-[55vh] w-[31vh]'
+                ? 'vertical-player-cap h-[55vh] w-[31vh] max-h-[360px] max-w-[202px]'
                 : 'w-full'
             }`}
           >
@@ -368,11 +485,74 @@ export function HotspotEditor({
               onHotspotOpened={(id) => setOpenId(id)}
               onPlayerReady={handlePlayerReady}
             />
+
+            {/* Spatial pin markers — render dots on the frame for every
+              * hotspot that has a saved (x, y). Hidden during placement
+              * mode (their pointer-events would intercept the placement
+              * click). The active hotspot pulses to draw attention. */}
+            {!placingMode &&
+              hotspots.map((h) => {
+                const pos = positions[h.id];
+                if (!pos) return null;
+                const isActive =
+                  currentTime >= h.timestampSeconds &&
+                  currentTime < h.timestampSeconds + 6;
+                return (
+                  <button
+                    key={h.id}
+                    type="button"
+                    onClick={() => {
+                      seekTo(h.timestampSeconds);
+                      setOpenId(h.id);
+                    }}
+                    className={`absolute z-[5] -translate-x-1/2 -translate-y-1/2 inline-flex h-6 w-6 items-center justify-center rounded-full border-2 border-white bg-gold text-white shadow-lg transition-transform duration-200 hover:scale-110 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/60 ${
+                      isActive ? 'animate-pulse ring-4 ring-gold/40' : ''
+                    }`}
+                    style={{ left: `${pos.x}%`, top: `${pos.y}%` }}
+                    aria-label={`${h.title} at ${formatTime(h.timestampSeconds)}`}
+                  >
+                    <MapPin size={12} />
+                  </button>
+                );
+              })}
+
             <InVideoOverlay
               state={computeOverlayState(hotspots, currentTime)}
+              variant="editor"
               onOpenActive={(id) => setOpenId(id)}
               onSeekToUpcoming={(t) => seekTo(t)}
             />
+
+            {/* Placement-mode capture layer. Sits above everything (z-30),
+              * shows the crosshair cursor, and consumes the first click as
+              * the pin location for a brand-new hotspot. Esc cancels. */}
+            {placingMode && (
+              <div
+                onClick={handlePlacementClick}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') setPlacingMode(false);
+                }}
+                role="button"
+                tabIndex={0}
+                aria-label="Click on the video to place a new hotspot"
+                className="absolute inset-0 z-30 cursor-crosshair bg-charcoal/30 backdrop-blur-[1px] flex items-start justify-center"
+              >
+                <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-gold/50 bg-charcoal/95 px-4 py-2 text-xs font-medium text-white shadow-lg backdrop-blur">
+                  <Crosshair size={14} className="text-gold" />
+                  Click anywhere on the video to pin the new hotspot
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setPlacingMode(false);
+                    }}
+                    className="ml-2 rounded-full border border-white/20 px-2 py-0.5 text-[10px] uppercase tracking-wider text-white/80 hover:bg-white/10"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
           <ChapterTrack
             hotspots={hotspots}
@@ -388,18 +568,47 @@ export function HotspotEditor({
                 {formatTime(currentTime)} / {formatTime(video.durationSeconds)}
               </span>
             </div>
-            <button
-              type="button"
-              onClick={addHotspotAtCurrent}
-              disabled={creating}
-              className="btn-primary"
-            >
-              <span className="inline-flex items-center gap-2">
-                <Plus size={16} />
-                Hotspot at {formatTime(currentTime)}
-              </span>
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPlacingMode((p) => !p)}
+                disabled={creating}
+                className={
+                  placingMode
+                    ? 'inline-flex items-center gap-2 rounded-full border border-gold bg-gold/10 px-4 py-2 text-sm font-medium text-gold-dark transition-colors duration-200 hover:bg-gold/20'
+                    : 'inline-flex items-center gap-2 rounded-full border border-sand bg-white px-4 py-2 text-sm font-medium text-charcoal transition-colors duration-200 hover:border-gold/60 hover:text-gold-dark'
+                }
+                title="Pause the video on the frame you want, then click on the video to drop a pin"
+                aria-pressed={placingMode}
+              >
+                <Crosshair size={14} />
+                {placingMode ? 'Cancel pin' : 'Pin on video'}
+              </button>
+              <button
+                type="button"
+                onClick={addHotspotAtCurrent}
+                disabled={creating || placingMode}
+                className="btn-primary"
+              >
+                <span className="inline-flex items-center gap-2">
+                  <Plus size={16} />
+                  Hotspot at {formatTime(currentTime)}
+                </span>
+              </button>
+            </div>
           </div>
+          {Object.keys(positions).length > 0 && (
+            <p className="text-[11px] text-charcoal-light">
+              <MapPin size={10} className="inline-block align-middle text-gold-dark" />{' '}
+              <span className="font-medium text-charcoal">
+                {Object.keys(positions).length}
+              </span>{' '}
+              hotspot
+              {Object.keys(positions).length === 1 ? '' : 's'} pinned to a spot
+              on the video. Pinned positions are saved on this browser only
+              until the schema supports them server-side.
+            </p>
+          )}
         </div>
 
         {/* Hotspot list */}
